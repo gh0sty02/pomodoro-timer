@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /.next/
+Disallow: /api/
+
+Sitemap: https://pomodoro-timer.vercel.app/sitemap.xml
