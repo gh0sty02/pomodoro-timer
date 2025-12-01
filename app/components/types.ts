@@ -26,3 +26,9 @@ export interface AudioContextRefs {
   rainNode: AudioBufferSourceNode | null;
   gainNode: GainNode | null;
 }
+
+export interface SoundEffect {
+  id: string;
+  name: string;
+  path: string;
+}

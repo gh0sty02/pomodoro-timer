@@ -17,6 +17,64 @@ export const initAudio = (
   }
 };
 
+export const playAmbientSound = (
+  audioCtxRef: MutableRefObject<AudioContext | null>,
+  audioNodeRef: MutableRefObject<HTMLAudioElement | null>,
+  soundPath: string
+): void => {
+  initAudio(audioCtxRef);
+
+  // Use the DOM audio element passed via ref
+  if (!audioNodeRef.current) {
+    return; // Audio element not mounted yet
+  }
+
+  const audio = audioNodeRef.current;
+
+  // Stop any existing playback
+  if (!audio.paused) {
+    audio.pause();
+    audio.currentTime = 0;
+  }
+
+  // Set up and play the new sound
+  audio.src = soundPath;
+  audio.loop = true;
+  audio.volume = 0.3;
+
+  // Reset to start in case it was playing before
+  audio.currentTime = 0;
+
+  // Play with error handling
+  const playPromise = audio.play();
+  if (playPromise !== undefined) {
+    playPromise.catch((err) => console.error('Audio playback failed:', err));
+  }
+};
+
+export const stopAmbientSound = (
+  audioNodeRef: MutableRefObject<HTMLAudioElement | null>
+): void => {
+  if (audioNodeRef.current) {
+    // Fade out
+    const currentVolume = audioNodeRef.current.volume;
+    const fadeInterval = setInterval(() => {
+      if (audioNodeRef.current && audioNodeRef.current.volume > 0.01) {
+        audioNodeRef.current.volume = Math.max(
+          0,
+          audioNodeRef.current.volume - 0.05
+        );
+      } else {
+        if (audioNodeRef.current) {
+          audioNodeRef.current.pause();
+          audioNodeRef.current.volume = currentVolume;
+        }
+        clearInterval(fadeInterval);
+      }
+    }, 50);
+  }
+};
+
 export const playRain = (
   audioCtxRef: MutableRefObject<AudioContext | null>,
   rainNodeRef: MutableRefObject<AudioBufferSourceNode | null>,

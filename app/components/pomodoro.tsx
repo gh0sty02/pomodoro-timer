@@ -18,8 +18,16 @@ import {
   SCENIC_THEMES,
   INITIAL_FOCUS_MINUTES,
   INITIAL_BREAK_MINUTES,
+  SOUND_EFFECTS,
 } from './constants';
-import { playRain, stopRain, playBell, initAudio } from './audioEngine';
+import {
+  playRain,
+  stopRain,
+  playBell,
+  initAudio,
+  playAmbientSound,
+  stopAmbientSound,
+} from './audioEngine';
 import { formatTime, formatTotalTime, calculateCircleMetrics } from './utils';
 import type { TimersState, ViewMode, ActiveMode } from './types';
 
@@ -48,6 +56,8 @@ const PomodoroTimer: React.FC = () => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [customMinutes, setCustomMinutes] = useState<string>('25');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [selectedSoundId, setSelectedSoundId] = useState<string>('rain');
+  const [showSoundMenu, setShowSoundMenu] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showMenu, setShowMenu] = useState<boolean>(false);
   const [themeIndex, setThemeIndex] = useState<number>(0);
@@ -62,6 +72,7 @@ const PomodoroTimer: React.FC = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rainNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+  const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // --- Event Handlers ---
 
@@ -96,14 +107,42 @@ const PomodoroTimer: React.FC = () => {
         stopRain(audioCtxRef, rainNodeRef, gainNodeRef);
       }
       playRain(audioCtxRef, rainNodeRef, gainNodeRef);
+
+      // Play selected ambient sound
+      const selectedSound = SOUND_EFFECTS.find((s) => s.id === selectedSoundId);
+      if (selectedSound && ambientAudioRef.current) {
+        playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
+      }
     }
-  }, [viewMode, timers, soundEnabled]);
+  }, [viewMode, timers, soundEnabled, selectedSoundId]);
 
   const pauseActiveTimer = useCallback((): void => {
     setActiveMode(null);
     setEndTime(null);
     stopRain(audioCtxRef, rainNodeRef, gainNodeRef);
+    stopAmbientSound(ambientAudioRef);
   }, []);
+
+  // Handle sound selection change - switch immediately if timer is running
+  const handleSoundChange = useCallback(
+    (newSoundId: string): void => {
+      setSelectedSoundId(newSoundId);
+
+      // If a timer is currently active and sound is enabled, switch to the new sound immediately
+      if (activeMode && soundEnabled) {
+        const selectedSound = SOUND_EFFECTS.find((s) => s.id === newSoundId);
+        if (selectedSound) {
+          // Stop current ambient sound
+          stopAmbientSound(ambientAudioRef);
+          // Small delay to ensure clean playback transition
+          setTimeout(() => {
+            playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
+          }, 100);
+        }
+      }
+    },
+    [activeMode, soundEnabled, audioCtxRef]
+  );
 
   const toggleTimer = useCallback((): void => {
     if (activeMode === viewMode) {
@@ -313,6 +352,9 @@ const PomodoroTimer: React.FC = () => {
           background-attachment: fixed;
         }
       `}</style>
+
+      {/* Hidden audio element for ambient sound */}
+      <audio ref={ambientAudioRef} preload="auto" />
 
       {/* Background Image */}
       <div
@@ -555,7 +597,7 @@ const PomodoroTimer: React.FC = () => {
                 {showMenu && (
                   <div
                     ref={menuRef}
-                    className="absolute left-full top-0 ml-2 w-72 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden text-left"
+                    className="absolute left-full top-0 ml-2 w-72 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50 text-left"
                   >
                     <div className="flex items-center justify-between p-4 border-b border-white/10">
                       <div className="flex items-center gap-2">
@@ -621,6 +663,71 @@ const PomodoroTimer: React.FC = () => {
                           />
                         </button>
                       </div>
+                      {soundEnabled && (
+                        <div className="px-3 py-2 space-y-2 relative">
+                          <button
+                            onClick={() => setShowSoundMenu(!showSoundMenu)}
+                            className="w-full px-3 py-2 bg-linear-to-r from-white/15 to-white/5 border border-white/20 rounded-lg text-white text-sm text-left flex items-center justify-between hover:bg-linear-to-r hover:from-white/20 hover:to-white/10 hover:border-white/30 transition-all"
+                          >
+                            <span>
+                              {SOUND_EFFECTS.find(
+                                (s) => s.id === selectedSoundId
+                              )?.name || 'Select sound'}
+                            </span>
+                            <svg
+                              className={`w-4 h-4 transition-transform ${
+                                showSoundMenu ? 'rotate-180' : ''
+                              }`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                              />
+                            </svg>
+                          </button>
+
+                          {showSoundMenu && (
+                            <div className="absolute left-full top-0 ml-2 w-64 bg-linear-to-b from-white/20 to-white/10 border border-white/20 rounded-lg shadow-xl shadow-black/50 z-50 backdrop-blur-sm max-h-96 overflow-y-auto">
+                              {SOUND_EFFECTS.map((sound) => (
+                                <button
+                                  key={sound.id}
+                                  onClick={() => {
+                                    handleSoundChange(sound.id);
+                                    setShowSoundMenu(false);
+                                  }}
+                                  className={`w-full px-4 py-2.5 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                                    selectedSoundId === sound.id
+                                      ? 'bg-white/30 text-white font-medium'
+                                      : 'text-white/80 hover:bg-white/15'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span>{sound.name}</span>
+                                    {selectedSoundId === sound.id && (
+                                      <svg
+                                        className="w-4 h-4"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                    )}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between px-3 py-2">
                         <span className="text-sm text-white/80">
                           Hide seconds

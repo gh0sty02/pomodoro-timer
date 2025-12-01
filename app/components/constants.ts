@@ -83,5 +83,33 @@ export const SCENIC_THEMES: Theme[] = [
   },
 ];
 
+export const SOUND_EFFECTS = [
+  {
+    id: 'rain',
+    name: 'Rain',
+    path: '/audio/787923__brucehep__thunder-and-rain-on-the-highveld(2).mp3',
+  },
+  {
+    id: 'wilderness',
+    name: 'Wilderness',
+    path: '/audio/366670__rtb45__desolation-wilderness.mp3',
+  },
+  {
+    id: 'stream',
+    name: 'Stream',
+    path: '/audio/164894__timkahn__trapper-creek.mp3',
+  },
+  {
+    id: 'nature',
+    name: 'Nature Soundscape',
+    path: '/audio/789323__matio888__tranquil-nature-soundscape(2).mp3',
+  },
+  {
+    id: 'birds',
+    name: 'Birds & Skylarks',
+    path: '/audio/667310__philip_goddard__remote-solitude-with-skylarks-on-cut-hill-dartmoor.mp3',
+  },
+];
+
 export const INITIAL_FOCUS_MINUTES = 25;
 export const INITIAL_BREAK_MINUTES = 5;
