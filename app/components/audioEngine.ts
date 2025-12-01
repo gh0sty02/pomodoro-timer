@@ -34,6 +34,7 @@ export const playAmbientSound = (
   // Ensure audio is paused before changing source
   audio.pause();
   audio.src = soundPath;
+  audio.load(); // Load the new source and clear any buffered data
   audio.loop = true;
   audio.volume = 0.3;
   audio.currentTime = 0;

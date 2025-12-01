@@ -85,6 +85,11 @@ export const SCENIC_THEMES: Theme[] = [
 
 export const SOUND_EFFECTS = [
   {
+    id: 'default',
+    name: 'Default (Synthetic Rain)',
+    path: '', // No path needed - uses playRain function
+  },
+  {
     id: 'rain',
     name: 'Rain',
     path: '/audio/787923__brucehep__thunder-and-rain-on-the-highveld(2).mp3',

@@ -64,7 +64,7 @@ const PomodoroTimer: React.FC = () => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [customMinutes, setCustomMinutes] = useState<string>('25');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [selectedSoundId, setSelectedSoundId] = useState<string>('rain');
+  const [selectedSoundId, setSelectedSoundId] = useState<string>('default');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [themeIndex, setThemeIndex] = useState<number>(0);
   const [hideSeconds, setHideSeconds] = useState<boolean>(false);
@@ -108,15 +108,19 @@ const PomodoroTimer: React.FC = () => {
 
     if (soundEnabled) {
       initAudio(audioCtxRef);
-      if (rainNodeRef.current) {
-        stopRain(audioCtxRef, rainNodeRef, gainNodeRef);
-      }
-      playRain(audioCtxRef, rainNodeRef, gainNodeRef);
 
-      // Play selected ambient sound
-      const selectedSound = SOUND_EFFECTS.find((s) => s.id === selectedSoundId);
-      if (selectedSound && ambientAudioRef.current) {
-        playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
+      if (selectedSoundId === 'default') {
+        // Play synthetic rain sound
+        if (rainNodeRef.current) {
+          stopRain(audioCtxRef, rainNodeRef, gainNodeRef);
+        }
+        playRain(audioCtxRef, rainNodeRef, gainNodeRef);
+      } else {
+        // Play selected ambient sound file
+        const selectedSound = SOUND_EFFECTS.find((s) => s.id === selectedSoundId);
+        if (selectedSound && selectedSound.path && ambientAudioRef.current) {
+          playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
+        }
       }
     }
   }, [viewMode, timers, soundEnabled, selectedSoundId]);
@@ -131,20 +135,36 @@ const PomodoroTimer: React.FC = () => {
   // Handle sound selection change - switch immediately if timer is running
   const handleSoundChange = useCallback(
     async (newSoundId: string): Promise<void> => {
+      const previousSoundId = selectedSoundId;
       setSelectedSoundId(newSoundId);
 
       // If a timer is currently active and sound is enabled, switch to the new sound immediately
       if (activeMode && soundEnabled) {
-        const selectedSound = SOUND_EFFECTS.find((s) => s.id === newSoundId);
-        if (selectedSound) {
-          // Stop current ambient sound and wait for it to finish fading out
+        if (newSoundId === 'default') {
+          // Switching to default - stop ambient sound and start rain
           await stopAmbientSound(ambientAudioRef);
-          // Now play the new sound
-          playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
+          if (rainNodeRef.current) {
+            stopRain(audioCtxRef, rainNodeRef, gainNodeRef);
+          }
+          playRain(audioCtxRef, rainNodeRef, gainNodeRef);
+        } else {
+          // Switching to a non-default sound
+          const selectedSound = SOUND_EFFECTS.find((s) => s.id === newSoundId);
+          if (selectedSound && selectedSound.path) {
+            if (previousSoundId === 'default') {
+              // Coming from default - stop rain and start ambient sound
+              stopRain(audioCtxRef, rainNodeRef, gainNodeRef);
+              playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
+            } else {
+              // Switching between ambient sounds - stop current and play new
+              await stopAmbientSound(ambientAudioRef);
+              playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
+            }
+          }
         }
       }
     },
-    [activeMode, soundEnabled, audioCtxRef]
+    [activeMode, soundEnabled, selectedSoundId, audioCtxRef]
   );
 
   const toggleTimer = useCallback((): void => {
