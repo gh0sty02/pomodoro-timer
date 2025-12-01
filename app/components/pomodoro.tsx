@@ -8,7 +8,6 @@ import {
   MoreHorizontal,
   Check,
   Plus,
-  ArrowRightLeft,
   Maximize,
   Minimize,
   Brain,
@@ -30,6 +29,15 @@ import {
 } from './audioEngine';
 import { formatTime, formatTotalTime, calculateCircleMetrics } from './utils';
 import type { TimersState, ViewMode, ActiveMode } from './types';
+import { SoundSettings } from './SoundSettings';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/app/components/ui/dropdown-menu';
 
 const PomodoroTimer: React.FC = () => {
   // --- State ---
@@ -57,14 +65,11 @@ const PomodoroTimer: React.FC = () => {
   const [customMinutes, setCustomMinutes] = useState<string>('25');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [selectedSoundId, setSelectedSoundId] = useState<string>('rain');
-  const [showSoundMenu, setShowSoundMenu] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [showMenu, setShowMenu] = useState<boolean>(false);
   const [themeIndex, setThemeIndex] = useState<number>(0);
   const [hideSeconds, setHideSeconds] = useState<boolean>(false);
 
   const currentTheme = SCENIC_THEMES[themeIndex];
-  const menuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hasRandomizedTheme = useRef<boolean>(false);
 
@@ -125,19 +130,17 @@ const PomodoroTimer: React.FC = () => {
 
   // Handle sound selection change - switch immediately if timer is running
   const handleSoundChange = useCallback(
-    (newSoundId: string): void => {
+    async (newSoundId: string): Promise<void> => {
       setSelectedSoundId(newSoundId);
 
       // If a timer is currently active and sound is enabled, switch to the new sound immediately
       if (activeMode && soundEnabled) {
         const selectedSound = SOUND_EFFECTS.find((s) => s.id === newSoundId);
         if (selectedSound) {
-          // Stop current ambient sound
-          stopAmbientSound(ambientAudioRef);
-          // Small delay to ensure clean playback transition
-          setTimeout(() => {
-            playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
-          }, 100);
+          // Stop current ambient sound and wait for it to finish fading out
+          await stopAmbientSound(ambientAudioRef);
+          // Now play the new sound
+          playAmbientSound(audioCtxRef, ambientAudioRef, selectedSound.path);
         }
       }
     },
@@ -154,16 +157,23 @@ const PomodoroTimer: React.FC = () => {
 
   const resetTimer = useCallback((): void => {
     pauseActiveTimer();
-    const currentTimer = timers[viewMode];
-    setTimers((prev) => ({
-      ...prev,
-      [viewMode]: {
-        ...prev[viewMode],
-        timeLeft: currentTimer.initialTime,
+    // Reset both focus and break timers to their initial values
+    setTimers({
+      focus: {
+        timeLeft: INITIAL_FOCUS_MINUTES * 60 * 1000,
+        duration: INITIAL_FOCUS_MINUTES,
+        initialTime: INITIAL_FOCUS_MINUTES * 60 * 1000,
       },
-    }));
+      break: {
+        timeLeft: INITIAL_BREAK_MINUTES * 60 * 1000,
+        duration: INITIAL_BREAK_MINUTES,
+        initialTime: INITIAL_BREAK_MINUTES * 60 * 1000,
+      },
+    });
+    // Return to focus timer
+    setViewMode('focus');
     setThemeIndex((prev) => (prev + 1) % SCENIC_THEMES.length);
-  }, [viewMode, timers, pauseActiveTimer]);
+  }, [pauseActiveTimer]);
 
   const addTenMinutes = useCallback((): void => {
     const addedMs = 10 * 60 * 1000;
@@ -303,18 +313,6 @@ const PomodoroTimer: React.FC = () => {
       // eslint-disable-next-line
       setThemeIndex(Math.floor(Math.random() * SCENIC_THEMES.length));
     }
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent): void => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setShowMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
   }, []);
 
   // --- Render Helpers ---
@@ -583,171 +581,87 @@ const PomodoroTimer: React.FC = () => {
               )}
 
               <div className="relative ml-4 -mt-4">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMenu(!showMenu);
-                  }}
-                  className="text-white/50 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
-                >
-                  <MoreHorizontal size={32} />
-                </button>
-
-                {/* Dropdown Menu */}
-                {showMenu && (
-                  <div
-                    ref={menuRef}
-                    className="absolute left-full top-0 ml-2 w-72 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50 text-left"
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="text-white/50 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10">
+                      <MoreHorizontal size={32} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-72 bg-black/90 border-white/20"
                   >
-                    <div className="flex items-center justify-between p-4 border-b border-white/10">
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full border border-white/50 flex items-center justify-center">
-                          <div className="w-2 h-2 rounded-full bg-white"></div>
-                        </div>
-                        <span className="font-medium text-white">Pomodoro</span>
+                    <DropdownMenuLabel className="flex items-center gap-2 px-2 py-1.5">
+                      <div className="w-3 h-3 rounded-full border border-white/50 flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
                       </div>
-                      <ArrowRightLeft
-                        size={16}
-                        className="text-white/50 cursor-pointer hover:text-white"
+                      <span className="font-medium text-white text-sm">
+                        Pomodoro
+                      </span>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-white/10" />
+
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (activeMode) {
+                          setTimers((p) => ({
+                            ...p,
+                            [activeMode]: { ...p[activeMode], timeLeft: 0 },
+                          }));
+                          setEndTime(Date.now());
+                        }
+                      }}
+                      className="cursor-pointer flex items-center gap-3 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                    >
+                      <Check size={16} /> Complete timer
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        resetTimer();
+                      }}
+                      className="cursor-pointer flex items-center gap-3 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                    >
+                      <RotateCcw size={16} /> Restart timer
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={addTenMinutes}
+                      className="cursor-pointer flex items-center gap-3 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                    >
+                      <Plus size={16} /> Add 10 minutes
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator className="bg-white/10" />
+
+                    <div className="px-3 py-2">
+                      <SoundSettings
+                        soundEnabled={soundEnabled}
+                        selectedSoundId={selectedSoundId}
+                        onSoundEnabledChange={setSoundEnabled}
+                        onSoundChange={handleSoundChange}
                       />
                     </div>
 
-                    <div className="p-2 border-b border-white/10">
-                      <button
-                        onClick={() => {
-                          if (activeMode) {
-                            setTimers((p) => ({
-                              ...p,
-                              [activeMode]: { ...p[activeMode], timeLeft: 0 },
-                            }));
-                            setEndTime(Date.now());
-                          }
-                          setShowMenu(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-lg transition-colors"
-                      >
-                        <Check size={16} /> Complete timer
-                      </button>
-                      <button
-                        onClick={() => {
-                          resetTimer();
-                          setShowMenu(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-lg transition-colors"
-                      >
-                        <RotateCcw size={16} /> Restart timer
-                      </button>
-                      <button
-                        onClick={addTenMinutes}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/80 hover:bg-white/10 rounded-lg transition-colors"
-                      >
-                        <Plus size={16} /> Add 10 minutes
-                      </button>
-                    </div>
+                    <DropdownMenuSeparator className="bg-white/10" />
 
-                    <div className="p-2 space-y-1">
-                      <div className="flex items-center justify-between px-3 py-2">
-                        <span className="text-sm text-white/80">
-                          Timer sound effects
-                        </span>
-                        <button
-                          onClick={() => setSoundEnabled(!soundEnabled)}
-                          className={`w-10 h-5 rounded-full relative transition-colors ${
-                            soundEnabled ? 'bg-white' : 'bg-white/20'
+                    <DropdownMenuItem
+                      onClick={() => setHideSeconds(!hideSeconds)}
+                      className="cursor-pointer flex items-center justify-between px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                    >
+                      <span>Hide seconds</span>
+                      <div
+                        className={`w-8 h-4 rounded-full relative transition-colors ${
+                          hideSeconds ? 'bg-white' : 'bg-white/20'
+                        }`}
+                      >
+                        <div
+                          className={`w-3 h-3 rounded-full bg-black absolute top-0.5 transition-all ${
+                            hideSeconds ? 'right-0.5' : 'left-0.5'
                           }`}
-                        >
-                          <div
-                            className={`w-3 h-3 rounded-full bg-black absolute top-1 transition-all ${
-                              soundEnabled ? 'left-6' : 'left-1'
-                            }`}
-                          />
-                        </button>
+                        />
                       </div>
-                      {soundEnabled && (
-                        <div className="px-3 py-2 space-y-2 relative">
-                          <button
-                            onClick={() => setShowSoundMenu(!showSoundMenu)}
-                            className="w-full px-3 py-2 bg-linear-to-r from-white/15 to-white/5 border border-white/20 rounded-lg text-white text-sm text-left flex items-center justify-between hover:bg-linear-to-r hover:from-white/20 hover:to-white/10 hover:border-white/30 transition-all"
-                          >
-                            <span>
-                              {SOUND_EFFECTS.find(
-                                (s) => s.id === selectedSoundId
-                              )?.name || 'Select sound'}
-                            </span>
-                            <svg
-                              className={`w-4 h-4 transition-transform ${
-                                showSoundMenu ? 'rotate-180' : ''
-                              }`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                              />
-                            </svg>
-                          </button>
-
-                          {showSoundMenu && (
-                            <div className="absolute left-full top-0 ml-2 w-64 bg-linear-to-b from-white/20 to-white/10 border border-white/20 rounded-lg shadow-xl shadow-black/50 z-50 backdrop-blur-sm max-h-96 overflow-y-auto">
-                              {SOUND_EFFECTS.map((sound) => (
-                                <button
-                                  key={sound.id}
-                                  onClick={() => {
-                                    handleSoundChange(sound.id);
-                                    setShowSoundMenu(false);
-                                  }}
-                                  className={`w-full px-4 py-2.5 text-left text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                                    selectedSoundId === sound.id
-                                      ? 'bg-white/30 text-white font-medium'
-                                      : 'text-white/80 hover:bg-white/15'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span>{sound.name}</span>
-                                    {selectedSoundId === sound.id && (
-                                      <svg
-                                        className="w-4 h-4"
-                                        fill="currentColor"
-                                        viewBox="0 0 20 20"
-                                      >
-                                        <path
-                                          fillRule="evenodd"
-                                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                          clipRule="evenodd"
-                                        />
-                                      </svg>
-                                    )}
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between px-3 py-2">
-                        <span className="text-sm text-white/80">
-                          Hide seconds
-                        </span>
-                        <button
-                          onClick={() => setHideSeconds(!hideSeconds)}
-                          className={`w-10 h-5 rounded-full relative transition-colors ${
-                            hideSeconds ? 'bg-white' : 'bg-white/20'
-                          }`}
-                        >
-                          <div
-                            className={`w-3 h-3 rounded-full bg-black absolute top-1 transition-all ${
-                              hideSeconds ? 'left-6' : 'left-1'
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 

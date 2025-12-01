@@ -31,48 +31,54 @@ export const playAmbientSound = (
 
   const audio = audioNodeRef.current;
 
-  // Stop any existing playback
-  if (!audio.paused) {
-    audio.pause();
-    audio.currentTime = 0;
-  }
-
-  // Set up and play the new sound
+  // Ensure audio is paused before changing source
+  audio.pause();
   audio.src = soundPath;
   audio.loop = true;
   audio.volume = 0.3;
-
-  // Reset to start in case it was playing before
   audio.currentTime = 0;
 
-  // Play with error handling
+  // Play the audio
   const playPromise = audio.play();
   if (playPromise !== undefined) {
-    playPromise.catch((err) => console.error('Audio playback failed:', err));
+    playPromise
+      .then(() => {
+        // Audio is playing successfully
+      })
+      .catch((err) => {
+        // Only log non-abort errors
+        if (err.name !== 'AbortError') {
+          console.error('Audio playback error:', err);
+        }
+      });
   }
 };
 
 export const stopAmbientSound = (
   audioNodeRef: MutableRefObject<HTMLAudioElement | null>
-): void => {
-  if (audioNodeRef.current) {
-    // Fade out
-    const currentVolume = audioNodeRef.current.volume;
-    const fadeInterval = setInterval(() => {
-      if (audioNodeRef.current && audioNodeRef.current.volume > 0.01) {
-        audioNodeRef.current.volume = Math.max(
-          0,
-          audioNodeRef.current.volume - 0.05
-        );
-      } else {
-        if (audioNodeRef.current) {
-          audioNodeRef.current.pause();
-          audioNodeRef.current.volume = currentVolume;
+): Promise<void> => {
+  return new Promise((resolve) => {
+    if (audioNodeRef.current) {
+      const audio = audioNodeRef.current;
+      const startVolume = audio.volume;
+      let currentVolume = startVolume;
+
+      const fadeInterval = setInterval(() => {
+        if (currentVolume > 0.01) {
+          currentVolume = Math.max(0, currentVolume - 0.05);
+          audio.volume = currentVolume;
+        } else {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = startVolume; // Reset volume for next playback
+          clearInterval(fadeInterval);
+          resolve();
         }
-        clearInterval(fadeInterval);
-      }
-    }, 50);
-  }
+      }, 50);
+    } else {
+      resolve();
+    }
+  });
 };
 
 export const playRain = (
